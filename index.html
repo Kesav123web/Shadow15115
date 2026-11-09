@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SHADOW - Universal Cloud IDE & Community Studio</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap">
+  <style>
+    * {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background: #08030d;
+      color: #ffffff;
+      overflow-x: hidden;
+    }
+    .ambient-glow {
+      position: absolute;
+      width: 85vw;
+      max-width: 500px;
+      height: 85vw;
+      max-height: 500px;
+      background: rgba(147, 51, 234, 0.22);
+      filter: blur(120px);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .company-title {
+      font-size: clamp(2.8rem, 9vw, 4.2rem);
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #ffffff;
+      text-shadow: 0 0 12px rgba(168, 85, 247, 0.9),
+                   0 0 30px rgba(147, 51, 234, 0.7),
+                   0 0 60px rgba(126, 34, 206, 0.5);
+    }
+    .hero-card {
+      background: rgba(15, 7, 25, 0.8);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85),
+                  0 0 45px rgba(147, 51, 234, 0.18);
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #060209;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(168, 85, 247, 0.4);
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(168, 85, 247, 0.7);
+    }
+  </style>
+
+  <!-- Firebase Modular Scripts -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, query, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Firebase Global Setup
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'shadow-universal-app';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+      apiKey: "demo-key",
+      authDomain: "demo.firebaseapp.com",
+      projectId: "demo-project",
+      storageBucket: "demo.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "1:123456789:web:demo"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Make Firebase references globally accessible to app code
+    window.shadowFB = {
+      appId,
+      auth,
+      db,
+      signInAnonymously,
+      signInWithCustomToken,
+      onAuthStateChanged,
+      collection,
+      doc,
+      setDoc,
+      getDoc,
+      getDocs,
+      onSnapshot,
+      query,
+      addDoc
+    };
+
+    // Initialize Auth state listener
+    window.addEventListener('DOMContentLoaded', () => {
+      initFirebaseSession();
+    });
+
+    async function initFirebaseSession() {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.warn("Auth initialization fallback:", err);
+      }
+    }
+  </script>
+</head>
+<body class="min-h-screen w-screen bg-[#08030d] text-white flex flex-col justify-between overflow-x-hidden">
+
+  <!-- Ambient Glow Effect -->
+  <div class="ambient-glow top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-0"></div>
+
+  <!-- ==========================================
+       1. HOME LANDING SCREEN
+  =========================================== -->
+  <div id="screen-landing" class="screen-view min-h-screen w-full flex flex-col justify-center items-center p-4 relative z-10">
+    <div class="hero-card rounded-3xl p-6 sm:p-10 max-w-md w-full text-center flex flex-col items-center gap-6">
+      <h1 class="company-title">SHADOW</h1>
+      
+      <!-- User Status Badge -->
+      <div id="user-status-bar" class="hidden text-xs sm:text-sm text-emerald-400 font-medium bg-emerald-950/60 border border-emerald-500/30 px-4 py-1.5 rounded-full">
+        Signed in as: <span id="current-user-badge" class="font-bold"></span>
+      </div>
+
+      <!-- Main Options Grid -->
+      <div class="w-full flex flex-col gap-3.5">
+        <button onclick="app.openNewProject()" class="w-full py-3.5 px-6 rounded-xl font-semibold bg-gradient-to-r from-purple-700 to-fuchsia-600 hover:from-purple-600 hover:to-fuchsia-500 text-white shadow-lg shadow-purple-900/40 hover:-translate-y-0.5 transition-all">
+          🚀 Create a Project
+        </button>
+        
+        <button onclick="app.triggerFolderOpen()" class="w-full py-3.5 px-6 rounded-xl font-semibold bg-purple-950/60 border border-purple-500/40 text-purple-200 hover:bg-purple-900/50 hover:text-white hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2">
+          <span>📁</span> Open Folder (Device)
+        </button>
+
+        <button onclick="app.openCommunityScreen()" class="w-full py-3.5 px-6 rounded-xl font-semibold bg-slate-900/80 border border-purple-500/30 text-purple-200 hover:bg-slate-800/90 hover:text-white hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2">
+          <span>🌐</span> See Others' Projects
+        </button>
+
+        <button onclick="app.openModal('modal-auth')" class="w-full py-3.5 px-6 rounded-xl font-semibold bg-white/5 border border-purple-400/20 text-slate-300 hover:bg-purple-600/20 hover:text-white hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2">
+          <span>🔑</span> Sign In / Register
+        </button>
+      </div>
+
+      <!-- Hidden standard fallback input for non-supporting browsers/devices -->
+      <input type="file" id="fallback-folder-input" webkitdirectory directory multiple class="hidden" onchange="app.handleFallbackFolderSelect(event)" />
+
+      <!-- Creator Protection & Admin Controls -->
+      <div class="w-full pt-2 flex flex-col items-center gap-2 border-t border-purple-500/15">
+        <div class="text-[11px] text-purple-400/80 bg-purple-500/5 px-3 py-1 rounded-full border border-purple-500/20">
+          🔒 Universal Privacy Active &bull; Multi-Device Sync
+        </div>
+
+        <div class="flex gap-2 w-full pt-1">
+          <button onclick="app.openAdminModal()" class="flex-1 py-2 text-xs border border-dashed border-purple-500/40 text-purple-400 hover:bg-purple-950/40 rounded-lg transition-all">
+            🔒 Creator Admin
+          </button>
+          <button onclick="app.verifyCreatorLock()" class="flex-1 py-2 text-xs border border-dashed border-purple-500/40 text-purple-400 hover:bg-purple-950/40 rounded-lg transition-all">
+            🛡️ Code Security Lock
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       2. CODE EDITOR / IDE SCREEN
+  =========================================== -->
+  <div id="screen-ide" class="screen-view hidden min-h-screen w-full flex-col bg-[#0d0714] relative z-10">
+    <!-- Top Action Bar -->
+    <header class="h-14 bg-[#0a0410] border-b border-purple-500/20 px-4 flex items-center justify-between gap-2 shrink-0">
+      <div class="flex items-center gap-3">
+        <span class="font-black tracking-widest text-purple-400 text-sm sm:text-base">SHADOW // STUDIO</span>
+        <span id="active-folder-tag" class="text-xs text-purple-300/60 hidden sm:inline-block"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="app.publishCurrentProject()" class="px-3.5 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-md shadow-md transition-all flex items-center gap-1">
+          <span>🚀</span> Publish
+        </button>
+        <button onclick="app.triggerFolderOpen()" class="px-3 py-1.5 text-xs bg-purple-900/40 border border-purple-500/40 text-purple-200 hover:bg-purple-800/50 rounded-md transition-all hidden sm:flex items-center gap-1">
+          <span>📁</span> Open Folder
+        </button>
+        <button onclick="app.showScreen('screen-landing')" class="px-3 py-1.5 text-xs bg-white/5 border border-purple-500/30 text-white hover:bg-purple-900/40 rounded-md transition-all flex items-center gap-1">
+          <span>🏠</span> Home
+        </button>
+      </div>
+    </header>
+
+    <!-- Workspace Main Body (Responsive layout for mobile split screen) -->
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+      <!-- Sidebar Explorer -->
+      <aside class="w-full md:w-56 bg-[#060209] border-b md:border-b-0 md:border-r border-purple-500/15 flex flex-col shrink-0 max-h-36 md:max-h-full">
+        <div class="px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400 border-b border-purple-500/10 flex justify-between items-center">
+          <span>Explorer</span>
+          <button onclick="app.addNewFilePrompt()" class="hover:text-purple-400 text-sm font-bold">+</button>
+        </div>
+        <ul id="ide-file-tree" class="custom-scrollbar overflow-y-auto p-2 flex flex-col gap-1"></ul>
+      </aside>
+
+      <!-- Code Editor Window -->
+      <section class="flex-1 flex flex-col border-b md:border-b-0 md:border-r border-purple-500/15 min-w-0">
+        <div id="ide-active-tab" class="bg-[#0d0714] px-4 py-2 text-xs text-purple-400 border-b-2 border-purple-500 font-mono w-max">
+          index.html
+        </div>
+        <textarea id="ide-editor" spellcheck="false" class="flex-1 bg-[#09040e] text-slate-100 p-4 font-mono text-sm leading-relaxed outline-none resize-none border-none custom-scrollbar" placeholder="Write your HTML/CSS/JS code here..."></textarea>
+      </section>
+
+      <!-- Live Web Preview Box -->
+      <section class="flex-1 flex flex-col bg-white min-w-0 min-h-[250px] md:min-h-0">
+        <div class="bg-[#11081c] text-slate-400 px-4 py-2 text-[11px] font-bold uppercase tracking-wider border-b border-purple-500/20 flex justify-between items-center">
+          <span>Live Website Preview</span>
+          <span class="text-[10px] text-emerald-400 font-normal">&bull; Auto-Rendering</span>
+        </div>
+        <iframe id="ide-preview-frame" class="w-full flex-1 border-none bg-white"></iframe>
+      </section>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       3. OTHERS' PROJECTS COMMUNITY HUB
+  =========================================== -->
+  <div id="screen-community" class="screen-view hidden min-h-screen w-full flex-col bg-[#08030d] relative z-10">
+    <header class="p-4 sm:p-6 bg-[#0a0410] border-b border-purple-500/20 flex justify-between items-center">
+      <div>
+        <h2 class="font-black text-lg sm:text-xl tracking-wider text-purple-400">SHADOW // COMMUNITY SHOWCASE</h2>
+        <p class="text-xs text-slate-400">Explore projects published across all devices</p>
+      </div>
+      <button onclick="app.showScreen('screen-landing')" class="px-3.5 py-1.5 text-xs bg-white/10 hover:bg-purple-900/40 border border-purple-500/30 text-white rounded-md transition-all">
+        🏠 Back Home
+      </button>
+    </header>
+
+    <div class="flex-1 p-4 sm:p-8 custom-scrollbar overflow-y-auto">
+      <div id="community-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
+        <!-- Community Project Cards Populate dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       4. MODALS (AUTH, ADMIN, PREVIEW, CHAT)
+  =========================================== -->
+
+  <!-- AUTHENTICATION MODAL (3 Fields with Lock Enforcements) -->
+  <div id="modal-auth" class="modal-view hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-center items-center p-4">
+    <div class="hero-card p-6 sm:p-8 rounded-2xl w-full max-w-md flex flex-col gap-4">
+      <h3 class="text-xl font-bold text-center text-white">Sign In to SHADOW</h3>
+      <p class="text-xs text-slate-400 text-center">Enter your unique Username and Password to get started.</p>
+      
+      <div id="auth-alert" class="hidden text-xs text-center p-2.5 rounded-lg"></div>
+
+      <form onsubmit="app.handleAuthSubmit(event)" class="flex flex-col gap-3.5">
+        <div class="flex flex-col gap-1 text-left">
+          <label class="text-xs text-purple-300 font-medium">1. Unique Username</label>
+          <input type="text" id="auth-username" required placeholder="creator_handle" class="p-3 bg-[#060209] border border-purple-500/30 rounded-xl text-sm text-white outline-none focus:border-purple-500" />
+        </div>
+
+        <div class="flex flex-col gap-1 text-left">
+          <label class="text-xs text-purple-300 font-medium">2. Password</label>
+          <input type="password" id="auth-password" required placeholder="••••••••" class="p-3 bg-[#060209] border border-purple-500/30 rounded-xl text-sm text-white outline-none focus:border-purple-500" />
+        </div>
+
+        <button type="submit" class="w-full py-3.5 rounded-xl font-semibold bg-gradient-to-r from-purple-700 to-fuchsia-600 text-white shadow-md hover:from-purple-600 hover:to-fuchsia-500 mt-2">
+          Sign In / Register
+        </button>
+        <button type="button" onclick="app.closeModal('modal-auth')" class="w-full py-2.5 rounded-xl text-xs bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800">
+          Cancel
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- CREATOR ADMIN DASHBOARD MODAL -->
+  <div id="modal-admin" class="modal-view hidden fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex justify-center items-center p-4">
+    <div class="hero-card p-6 rounded-2xl w-full max-w-md flex flex-col gap-4">
+      <h3 class="text-xl font-bold text-purple-300">App Creator Admin Dashboard</h3>
+      <div class="text-xs text-slate-400 bg-purple-950/40 border border-purple-500/20 p-3 rounded-lg text-left">
+        🛡️ <strong>Strict Privacy Guard:</strong> As the app creator, you can only see the overall user count and registered usernames. User passwords and local workspace code are 100% private.
+      </div>
+
+      <div class="text-left py-2">
+        <span class="text-sm text-slate-300">Total Registered Users:</span>
+        <span id="admin-user-count" class="text-2xl font-black text-purple-400 ml-2">0</span>
+      </div>
+
+      <div class="text-left flex flex-col gap-1.5">
+        <span class="text-xs text-purple-300 font-semibold">Registered Usernames List:</span>
+        <div id="admin-usernames-list" class="bg-[#060209] border border-purple-500/20 rounded-lg p-3 max-h-40 overflow-y-auto font-mono text-xs text-purple-200">
+          Loading...
+        </div>
+      </div>
+
+      <button onclick="app.closeModal('modal-admin')" class="w-full py-2.5 rounded-xl text-xs bg-purple-900/40 border border-purple-500/30 text-white hover:bg-purple-800/60 mt-2">
+        Close Admin Window
+      </button>
+    </div>
+  </div>
+
+  <!-- PROJECT VIEW / INTERACTIVE MODAL -->
+  <div id="modal-view-project" class="modal-view hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex justify-center items-center p-4">
+    <div class="hero-card p-4 sm:p-6 rounded-2xl w-full max-w-4xl h-[85vh] flex flex-col gap-3">
+      <div class="flex justify-between items-center flex-wrap gap-2">
+        <div>
+          <h3 id="view-modal-title" class="text-base sm:text-lg font-bold text-white"></h3>
+          <p id="view-modal-author" class="text-xs text-purple-400"></p>
+        </div>
+        <button id="view-modal-chat-btn" class="px-4 py-2 text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white rounded-lg shadow-md transition-all flex items-center gap-1.5">
+          <span>💬</span> Message Creator
+        </button>
+      </div>
+
+      <iframe id="view-modal-frame" class="w-full flex-1 rounded-xl bg-white border-none"></iframe>
+
+      <button onclick="app.closeModal('modal-view-project')" class="w-full py-2.5 rounded-xl text-xs bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800">
+        Close Preview
+      </button>
+    </div>
+  </div>
+
+  <!-- DIRECT CHAT / MESSAGING MODAL -->
+  <div id="modal-chat" class="modal-view hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex justify-center items-center p-4">
+    <div class="hero-card p-5 rounded-2xl w-full max-w-md flex flex-col gap-3">
+      <h3 class="text-lg font-bold text-white text-center">Talk to Project Creator</h3>
+      <p id="chat-recipient-label" class="text-xs text-purple-300 text-center"></p>
+
+      <!-- Messages Window -->
+      <div id="chat-box-messages" class="h-52 bg-[#060209] border border-purple-500/20 rounded-xl p-3 overflow-y-auto flex flex-col gap-2.5 custom-scrollbar text-left">
+        <!-- Messages populate dynamically -->
+      </div>
+
+      <div class="flex flex-col gap-1.5 text-left">
+        <textarea id="chat-input-text" rows="2" placeholder="Type your message or doubt..." class="w-full p-3 bg-[#060209] border border-purple-500/30 rounded-xl text-xs text-white outline-none focus:border-purple-500 resize-none"></textarea>
+      </div>
+
+      <div class="flex gap-2">
+        <button onclick="app.sendChatMessage()" class="flex-1 py-3 rounded-xl font-semibold text-xs bg-gradient-to-r from-purple-700 to-fuchsia-600 text-white hover:from-purple-600 hover:to-fuchsia-500">
+          Send Message
+        </button>
+        <button onclick="app.closeModal('modal-chat')" class="py-3 px-5 rounded-xl text-xs bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main JavaScript App Controller -->
+  <script>
+    class ShadowApp {
+      constructor() {
+        this.projectFiles = {
+          "index.html": `<!DOCTYPE html>\n<html>\n<head>\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <style>\n    body {\n      background: #0f0719;\n      color: #a855f7;\n      font-family: system-ui, sans-serif;\n      display: flex;\n      flex-direction: column;\n      justify-content: center;\n      align-items: center;\n      height: 100vh;\n      margin: 0;\n      text-align: center;\n    }\n    h1 {\n      font-size: 2.5rem;\n      margin-bottom: 0.5rem;\n    }\n    p {\n      color: #cbd5e1;\n    }\n  </style>\n</head>\n<body>\n  <h1>Welcome to SHADOW Studio!</h1>\n  <p>Start editing code or open your device folder.</p>\n</body>\n</html>`
+        };
+        this.activeFile = "index.html";
+        this.activeMessagingUser = "";
+        this.activeProjectId = "";
+
+        this.init();
+      }
+
+      init() {
+        document.addEventListener("DOMContentLoaded", () => {
+          this.editorEl = document.getElementById("ide-editor");
+          this.previewFrame = document.getElementById("ide-preview-frame");
+          
+          if (this.editorEl) {
+            this.editorEl.addEventListener("input", () => {
+              this.projectFiles[this.activeFile] = this.editorEl.value;
+              this.renderLivePreview();
+            });
+          }
+
+          this.updateUserUI();
+        });
+      }
+
+      showScreen(screenId) {
+        document.querySelectorAll(".screen-view").forEach(s => s.classList.add("hidden"));
+        const target = document.getElementById(screenId);
+        if (target) {
+          target.classList.remove("hidden");
+          target.classList.add("flex");
+        }
+      }
+
+      openModal(modalId) {
+        const target = document.getElementById(modalId);
+        if (target) target.classList.remove("hidden");
+      }
+
+      closeModal(modalId) {
+        const target = document.getElementById(modalId);
+        if (target) target.classList.add("hidden");
+      }
+
+      // ----------------------------------------------------
+      // IDE & FILE MANAGEMENT
+      // ----------------------------------------------------
+      openNewProject() {
+        this.projectFiles = {
+          "index.html": `<!DOCTYPE html>\n<html>\n<head>\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <style>\n    body { background: #0b0514; color: #c084fc; font-family: sans-serif; padding: 2rem; }\n  </style>\n</head>\n<body>\n  <h1>New SHADOW Web Project</h1>\n  <p>Created on device!</p>\n</body>\n</html>`
+        };
+        this.activeFile = "index.html";
+        document.getElementById("active-folder-tag").textContent = "(Default)";
+        this.renderFileList();
+        this.switchActiveFile("index.html");
+        this.showScreen("screen-ide");
+      }
+
+      async triggerFolderOpen() {
+        try {
+          if ('showDirectoryPicker' in window) {
+            const handle = await window.showDirectoryPicker();
+            this.projectFiles = {};
+            document.getElementById("active-folder-tag").textContent = `[ ${handle.name} ]`;
+
+            for await (const entry of handle.values()) {
+              if (entry.kind === 'file' && entry.name.match(/\.(html|css|js|json|txt|md)$/i)) {
+                const file = await entry.getFile();
+                this.projectFiles[entry.name] = await file.text();
+              }
+            }
+
+            const names = Object.keys(this.projectFiles);
+            this.activeFile = names.includes("index.html") ? "index.html" : (names[0] || "index.html");
+            if (names.length === 0) this.projectFiles["index.html"] = "<!-- Empty Folder Loaded -->";
+
+            this.renderFileList();
+            this.switchActiveFile(this.activeFile);
+            this.showScreen("screen-ide");
+          } else {
+            // Trigger fallback file input for legacy browsers
+            document.getElementById("fallback-folder-input").click();
+          }
+        } catch (e) {
+          console.log("Folder selection cancelled or failed:", e);
+        }
+      }
+
+      async handleFallbackFolderSelect(event) {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+
+        this.projectFiles = {};
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          if (file.name.match(/\.(html|css|js|json|txt|md)$/i)) {
+            this.projectFiles[file.name] = await file.text();
+          }
+        }
+
+        const names = Object.keys(this.projectFiles);
+        this.activeFile = names[0] || "index.html";
+        this.renderFileList();
+        this.switchActiveFile(this.activeFile);
+        this.showScreen("screen-ide");
+      }
+
+      switchActiveFile(filename) {
+        this.activeFile = filename;
+        document.getElementById("ide-active-tab").textContent = filename;
+        this.editorEl.value = this.projectFiles[filename] || "";
+        this.renderFileList();
+        this.renderLivePreview();
+      }
+
+      renderFileList() {
+        const listEl = document.getElementById("ide-file-tree");
+        if (!listEl) return;
+        listEl.innerHTML = "";
+
+        Object.keys(this.projectFiles).forEach(name => {
+          const li = document.createElement("li");
+          const isActive = name === this.activeFile;
+          li.className = `px-3 py-1.5 text-xs rounded-md cursor-pointer flex items-center gap-2 ${
+            isActive ? "bg-purple-600/30 text-white font-medium border border-purple-500/30" : "text-slate-300 hover:bg-purple-900/20"
+          }`;
+          li.innerHTML = `<span>📄</span> <span class="truncate">${name}</span>`;
+          li.onclick = () => this.switchActiveFile(name);
+          listEl.appendChild(li);
+        });
+      }
+
+      addNewFilePrompt() {
+        const name = prompt("Enter new filename (e.g. style.css, script.js):");
+        if (name && !this.projectFiles[name]) {
+          this.projectFiles[name] = "";
+          this.switchActiveFile(name);
+        }
+      }
+
+      renderLivePreview() {
+        if (this.previewFrame && this.activeFile.endsWith(".html")) {
+          this.previewFrame.srcdoc = this.editorEl.value;
+        }
+      }
+
+      // ----------------------------------------------------
+      // AUTHENTICATION & LOCKS (Cross-device via Firestore)
+      // ----------------------------------------------------
+      async handleAuthSubmit(event) {
+        event.preventDefault();
+        const username = document.getElementById("auth-username").value.trim();
+        const password = document.getElementById("auth-password").value;
+        const alertEl = document.getElementById("auth-alert");
+
+        alertEl.classList.add("hidden");
+
+        const fb = window.shadowFB;
+        if (!fb || !fb.db) {
+          this.showAuthError("Database connection lost. Please try again.");
+          return;
+        }
+
+        try {
+          const userDocRef = fb.doc(fb.db, 'artifacts', fb.appId, 'public', 'data', 'users', username.toLowerCase());
+          const userSnap = await fb.getDoc(userDocRef);
+
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            // Verify Password for existing user
+            if (userData.password !== password) {
+              this.showAuthError("Incorrect password for this username.");
+              return;
+            }
+            localStorage.setItem("shadow_user", userData.username);
+          } else {
+            // Register new user with unique username lock
+            await fb.setDoc(userDocRef, {
+              username: username,
+              password: password,
+              created: Date.now()
+            });
+
+            localStorage.setItem("shadow_user", username);
+          }
+
+          alertEl.className = "text-xs text-center p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-emerald-300";
+          alertEl.textContent = "Sign In successful!";
+          alertEl.classList.remove("hidden");
+
+          setTimeout(() => {
+            this.closeModal("modal-auth");
+            this.updateUserUI();
+          }, 800);
+
+        } catch (err) {
+          console.error("Auth Error:", err);
+          this.showAuthError("Failed to register/sign in. Check connection.");
+        }
+      }
+
+      showAuthError(msg) {
+        const alertEl = document.getElementById("auth-alert");
+        alertEl.className = "text-xs text-center p-2.5 rounded-lg bg-red-950/60 border border-red-500/30 text-red-300";
+        alertEl.textContent = msg;
+        alertEl.classList.remove("hidden");
+      }
+
+      updateUserUI() {
+        const user = localStorage.getItem("shadow_user");
+        const bar = document.getElementById("user-status-bar");
+        const badge = document.getElementById("current-user-badge");
+
+        if (user && bar && badge) {
+          badge.textContent = `@${user}`;
+          bar.classList.remove("hidden");
+        }
+      }
+
+      async openAdminModal() {
+        const pass = prompt("Enter Creator Admin Passkey:");
+        if (pass !== "admin123") {
+          alert("Access Denied: Incorrect Creator Passkey.");
+          return;
+        }
+
+        const fb = window.shadowFB;
+        if (fb && fb.db) {
+          try {
+            const usersRef = fb.collection(fb.db, 'artifacts', fb.appId, 'public', 'data', 'users');
+            const snapshot = await fb.getDocs(usersRef);
+            const users = snapshot.docs.map(d => d.data());
+
+            document.getElementById("admin-user-count").textContent = users.length;
+            document.getElementById("admin-usernames-list").innerHTML = users.length > 0
+              ? users.map(u => `<div>&bull; @${u.username}</div>`).join("")
+              : "<div>No users registered yet.</div>";
+          } catch (e) {
+            document.getElementById("admin-usernames-list").textContent = "Error fetching user list.";
+          }
+        }
+        this.openModal("modal-admin");
+      }
+
+      verifyCreatorLock() {
+        const pass = prompt("Enter App Creator Passkey:");
+        if (pass !== "admin123") {
+          alert("Access Denied: Protected System Architecture.");
+        } else {
+          alert("Passkey Verified: Creator security cleared.");
+        }
+      }
+
+      // ----------------------------------------------------
+      // PUBLISHING & CROSS-DEVICE COMMUNITY
+      // ----------------------------------------------------
+      async publishCurrentProject() {
+        const activeUser = localStorage.getItem("shadow_user");
+        if (!activeUser) {
+          alert("Please Sign In first before publishing projects!");
+          this.openModal("modal-auth");
+          return;
+        }
+
+        const title = prompt("Enter a title for your published project:", "My Web App");
+        if (!title) return;
+
+        const code = this.projectFiles["index.html"] || this.editorEl.value;
+
+        const fb = window.shadowFB;
+        if (fb && fb.db) {
+          try {
+            const projectsRef = fb.collection(fb.db, 'artifacts', fb.appId, 'public', 'data', 'projects');
+            await fb.addDoc(projectsRef, {
+              title,
+              author: activeUser,
+              code,
+              timestamp: Date.now()
+            });
+
+            alert(`Project "${title}" successfully published under @${activeUser}!`);
+          } catch (err) {
+            console.error("Publish error:", err);
+            alert("Error publishing project to cloud.");
+          }
+        }
+      }
+
+      async openCommunityScreen() {
+        this.showScreen("screen-community");
+        const grid = document.getElementById("community-grid");
+        grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-10">Loading community projects...</div>`;
+
+        const fb = window.shadowFB;
+        if (fb && fb.db) {
+          try {
+            const projectsRef = fb.collection(fb.db, 'artifacts', fb.appId, 'public', 'data', 'projects');
+            const snapshot = await fb.getDocs(projectsRef);
+            const projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            if (projects.length === 0) {
+              grid.innerHTML = `<div class="col-span-full text-center text-slate-400 py-10">No projects published yet. Be the first to publish!</div>`;
+              return;
+            }
+
+            grid.innerHTML = projects.map(p => `
+              <div class="hero-card p-5 rounded-2xl flex flex-col justify-between gap-4">
+                <div>
+                  <h4 class="font-bold text-lg text-white">${p.title}</h4>
+                  <p class="text-xs text-purple-400">Creator: @${p.author}</p>
+                </div>
+                <div class="flex gap-2 pt-2 border-t border-purple-500/15">
+                  <button onclick="app.viewPublishedProject('${p.id}')" class="flex-1 py-2 text-xs font-semibold bg-purple-900/40 border border-purple-500/30 text-white rounded-lg hover:bg-purple-800/50">
+                    👁️ View
+                  </button>
+                  <button onclick="app.openChatModal('${p.author}', '${p.id}', '${p.title}')" class="flex-1 py-2 text-xs font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-500">
+                    💬 Message
+                  </button>
+                </div>
+              </div>
+            `).join("");
+
+          } catch (err) {
+            grid.innerHTML = `<div class="col-span-full text-center text-red-400 py-10">Failed to load projects.</div>`;
+          }
+        }
+      }
+
+      async viewPublishedProject(projectId) {
+        const fb = window.shadowFB;
+        if (fb && fb.db) {
+          try {
+            const projectsRef = fb.collection(fb.db, 'artifacts', fb.appId, 'public', 'data', 'projects');
+            const snapshot = await fb.getDocs(projectsRef);
+            const projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const proj = projects.find(p => p.id === projectId);
+
+            if (proj && proj.code) {
+              document.getElementById("view-modal-title").textContent = proj.title;
+              document.getElementById("view-modal-author").textContent = `Created by @${proj.author}`;
+              
+              const frame = document.getElementById("view-modal-frame");
+              frame.srcdoc = proj.code;
+
+              document.getElementById("view-modal-chat-btn").onclick = () => {
+                this.closeModal("modal-view-project");
+                this.openChatModal(proj.author, proj.id, proj.title);
+              };
+
+              this.openModal("modal-view-project");
+            } else {
+              alert("Project content unavailable.");
+            }
+          } catch (e) {
+            alert("Error loading preview.");
+          }
+        }
+      }
+
+      // ----------------------------------------------------
+      // DIRECT MESSAGING / CHAT SYSTEM
+      // ----------------------------------------------------
+      openChatModal(author, projectId, title) {
+        const activeUser = localStorage.getItem("shadow_user");
+        if (!activeUser) {
+          alert("Please Sign In first to send messages.");
+          this.openModal("modal-auth");
+          return;
+        }
+
+        this.activeMessagingUser = author;
+        this.activeProjectId = projectId;
+
+        document.getElementById("chat-recipient-label").textContent = `Chat with @${author} regarding "${title}"`;
+        document.getElementById("chat-input-text").value = "";
+
+        this.subscribeToMessages();
+        this.openModal("modal-chat");
+      }
+
+      subscribeToMessages() {
+        const fb = window.shadowFB;
+        if (fb && fb.db) {
+          const chatsRef = fb.collection(fb.db, 'artifacts', fb.appId, 'public', 'data', 'chats');
+          
+          fb.onSnapshot(chatsRef, (snapshot) => {
+            const msgs = snapshot.docs
+              .map(d => d.data())
+              .filter(m => m.projectId === this.activeProjectId)
+              .sort((a, b) => a.timestamp - b.timestamp);
+
+            const container = document.getElementById("chat-box-messages");
+            if (msgs.length === 0) {
+              container.innerHTML = `<span class="text-slate-500 text-xs">No messages yet. Start talking!</span>`;
+            } else {
+              container.innerHTML = msgs.map(m => `
+                <div class="chat-msg">
+                  <strong class="text-purple-300">@${m.sender}:</strong>
+                  <span class="text-slate-200 ml-1">${m.text}</span>
+                </div>
+              `).join("");
+            }
+            container.scrollTop = container.scrollHeight;
+          });
+        }
+      }
+
+      async sendChatMessage() {
+        const textEl = document.getElementById("chat-input-text");
+        const text = textEl.value.trim();
+        const activeUser = localStorage.getItem("shadow_user");
+
+        if (!text) return;
+
+        const fb = window.shadowFB;
+        if (fb && fb.db) {
+          try {
+            const chatsRef = fb.collection(fb.db, 'artifacts', fb.appId, 'public', 'data', 'chats');
+            await fb.addDoc(chatsRef, {
+              projectId: this.activeProjectId,
+              recipient: this.activeMessagingUser,
+              sender: activeUser,
+              text,
+              timestamp: Date.now()
+            });
+
+            textEl.value = "";
+          } catch (e) {
+            alert("Failed to send message.");
+          }
+        }
+        }
+    }
+
+    // Initialize global app instance
+    window.app = new ShadowApp();
+  </script>
+</body>
+</html>
